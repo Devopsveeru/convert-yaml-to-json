@@ -1,0 +1,1 @@
+{"pool": {"vmImage": "$(imageName)"}, "strategy": {"maxParallel": 3, "matrix": {"windows": {"imageName": "windows-latest"}, "mac": {"imageName": "macOS-latest"}, "linux": {"imageName": "ubuntu-latest"}}}}

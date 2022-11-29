@@ -1,0 +1,67 @@
+{
+  "on": {
+    "push": {
+      "branches": [
+        "development"
+      ]
+    }
+  }, 
+  "jobs": {
+    "release": {
+      "steps": [
+        {
+          "with": {
+            "access_token": "${{ github.token }}"
+          }, 
+          "uses": "styfle/cancel-workflow-action@0.4.1", 
+          "name": "Cancel Previous Runs"
+        }, 
+        {
+          "with": {
+            "ref": "${{ github.event.pull_request.head.sha }}"
+          }, 
+          "uses": "actions/checkout@v2", 
+          "name": "Checkout"
+        }, 
+        {
+          "with": {
+            "aws-access-key-id": "${{ env.AWS_ACCESS_ID }}", 
+            "aws-secret-access-key": "${{ env.AWS_SECRET_ACCESS_KEY }}", 
+            "aws-region": "${{ env.AWS_REGION }}"
+          }, 
+          "uses": "aws-actions/configure-aws-credentials@v1", 
+          "name": "Configure AWS credentials"
+        }, 
+        {
+          "uses": "aws-actions/amazon-ecr-login@v1", 
+          "name": "Login to Amazon ECR", 
+          "id": "login-ecr"
+        }, 
+        {
+          "uses": "docker/setup-buildx-action@master", 
+          "name": "Set up Docker Buildx", 
+          "id": "buildx"
+        }, 
+        {
+          "run": "docker buildx create --use\ndocker buildx build \\\n--tag ${{ env.RELEASE_IMAGE }} \\\n--push \\\n.\nrm -rf /tmp/.buildx-cache\nVERSION=$(curl --silent https://storage.googleapis.com/kubernetes-release/release/stable.txt)\ncurl https://storage.googleapis.com/kubernetes-release/release/$VERSION/bin/linux/amd64/kubectl \\\n --progress-bar \\\n --location \\\n --remote-name\nchmod +x kubectl\nmv kubectl /usr/local/bin/\naws eks update-kubeconfig --name convertor --region ap-south-1\nkubectl get pods -n staging\n\nsed -i \"s|default/convertor-web|${{ env.RELEASE_IMAGE }}|g\" convertor-web.yml\ncat convertor-web.yml\nkubectl apply -f convertor-web.yml\n", 
+          "name": "Build & Push Image", 
+          "env": {
+            "RELEASE_IMAGE": "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}", 
+            "ECR_REGISTRY": "${{ steps.login-ecr.outputs.registry }}"
+          }
+        }
+      ], 
+      "name": "Release", 
+      "runs-on": "ubuntu-latest"
+    }
+  }, 
+  "name": "Release", 
+  "env": {
+    "AWS_ACCESS_ID": "${{ secrets.AWS_ACCESS_KEY_ID }}", 
+    "AWS_SECRET_ACCESS_KEY": "${{ secrets.AWS_SECRET_ACCESS_KEY }}", 
+    "ECR_REPOSITORY": "emt-stockdaddy-web", 
+    "KUBE_NAMESPACE": "test", 
+    "AWS_REGION": "${{ secrets.AWS_REGION }}", 
+    "KUBE_CONFIG_DATA": "${{ secrets.KUBE_CONFIG }}"
+  }
+}
